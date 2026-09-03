@@ -1,6 +1,7 @@
 #include <obs-module.h>
 #include <obs-frontend-api.h>
 #include <graphics/graphics.h>
+#include <plugin-support.h>
 
 #include <QBoxLayout>
 #include <QFile>
