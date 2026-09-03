@@ -1,0 +1,38 @@
+name: Windows Installer
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    name: Build Windows x64 installer
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build plugin
+        uses: ./.github/actions/build-plugin
+        with:
+          target: x64
+          config: Release
+
+      - name: Package plugin and installer
+        uses: ./.github/actions/package-plugin
+        with:
+          target: x64
+          config: Release
+          package: 'true'
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fortnite-Map-Rotation-OBS-Windows-x64
+          path: |
+            release/*.exe
+            release/*.zip
+          if-no-files-found: error
