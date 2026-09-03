@@ -271,10 +271,10 @@ void sourceRender(void *data, gs_effect_t *)
 		source->revision = revision;
 	}
 	if (!source->texture) return;
-	gs_effect_t *effect = obs_get_base_effect(OBS_EFFECT_DEFAULT);
-	gs_eparam_t *param = gs_effect_get_param_by_name(effect, "image");
-	gs_effect_set_texture(param, source->texture);
-	while (gs_effect_loop(effect, "Draw")) gs_draw_sprite(source->texture, 0, kCanvasWidth, kCanvasHeight);
+	gs_blend_state_push();
+	gs_reset_blend_state();
+	obs_source_draw(source->texture, 0, 0, kCanvasWidth, kCanvasHeight, false);
+	gs_blend_state_pop();
 }
 
 obs_source_info rotationSourceInfo = {};
