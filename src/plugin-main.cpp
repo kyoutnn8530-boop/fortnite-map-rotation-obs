@@ -84,7 +84,7 @@ void roundedRect(QPainter &painter, const QRectF &rect, qreal radius, const QCol
 void drawText(QPainter &painter, const QRectF &rect, const QString &text, int size, int weight,
 	      const QColor &color, Qt::Alignment alignment = Qt::AlignLeft | Qt::AlignVCenter)
 {
-	QFont font("Arial");
+	QFont font(QStringLiteral("Yu Gothic UI"));
 	font.setPixelSize(size);
 	font.setWeight(static_cast<QFont::Weight>(weight));
 	painter.setFont(font);
@@ -103,7 +103,7 @@ QImage renderOverlay()
 	const QColor white(245, 249, 252), muted(154, 169, 185);
 	roundedRect(painter, QRectF(26, 26, 1228, 668), 28, panel);
 	roundedRect(painter, QRectF(26, 26, 12, 668), 6, green);
-	drawText(painter, QRectF(70, 48, 1140, 48), "FORTNITE CREATIVE  •  MAP ROTATION", 27, QFont::Bold, green);
+	drawText(painter, QRectF(70, 48, 1140, 48), QStringLiteral("フォートナイト クリエイティブ  •  マップ順番"), 27, QFont::Bold, green);
 	int current = -1, next = -1, completed = 0;
 	for (int i = 0; i < static_cast<int>(g_maps.size()); ++i) {
 		if (g_maps[i].completed) ++completed;
@@ -111,16 +111,16 @@ QImage renderOverlay()
 		else if (next < 0) next = i;
 	}
 	roundedRect(painter, QRectF(70, 120, 710, 214), 22, subPanel);
-	drawText(painter, QRectF(100, 140, 650, 34), current < 0 ? "ALL CLEAR" : "NOW PLAYING", 20,
+	drawText(painter, QRectF(100, 140, 650, 34), current < 0 ? QStringLiteral("全マップ完了") : QStringLiteral("現在のマップ"), 20,
 		 QFont::Bold, current < 0 ? green : muted);
 	drawText(painter, QRectF(100, 176, 650, 76), current < 0 ? QStringLiteral("全マップ完了！") : g_maps[current].name,
 		 47, QFont::Black, white);
 	if (current >= 0) drawText(painter, QRectF(100, 260, 650, 44), g_maps[current].code, 29, QFont::DemiBold, green);
 	roundedRect(painter, QRectF(810, 120, 400, 214), 22, subPanel);
-	drawText(painter, QRectF(840, 140, 340, 34), "NEXT MAP", 20, QFont::Bold, muted);
+	drawText(painter, QRectF(840, 140, 340, 34), QStringLiteral("次のマップ"), 20, QFont::Bold, muted);
 	drawText(painter, QRectF(840, 182, 340, 62), next < 0 ? QStringLiteral("—") : g_maps[next].name, 31, QFont::Bold, white);
 	if (next >= 0) drawText(painter, QRectF(840, 252, 340, 40), g_maps[next].code, 23, QFont::DemiBold, green);
-	drawText(painter, QRectF(70, 365, 900, 34), "MAP LIST", 20, QFont::Bold, muted);
+	drawText(painter, QRectF(70, 365, 900, 34), QStringLiteral("マップ一覧"), 20, QFont::Bold, muted);
 	const int first = current >= 0 ? current : std::max(0, static_cast<int>(g_maps.size()) - 5);
 	for (int row = 0; row < 5; ++row) {
 		const int index = first + row;
