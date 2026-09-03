@@ -95,7 +95,7 @@ void drawText(QPainter &painter, const QRectF &rect, const QString &text, int si
 QImage renderOverlay()
 {
 	QImage image(kCanvasWidth, kCanvasHeight, QImage::Format_RGBA8888);
-	image.fill(Qt::transparent);
+	image.fill(QColor(0, 255, 0));
 	QPainter painter(&image);
 	painter.setRenderHint(QPainter::Antialiasing, true);
 	painter.setRenderHint(QPainter::TextAntialiasing, true);
