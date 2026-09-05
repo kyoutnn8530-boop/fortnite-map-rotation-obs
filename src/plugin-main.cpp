@@ -14,11 +14,6 @@
 #include <QLineEdit>
 #include <QListWidget>
 #include <QMessageBox>
-#include <QNetworkAccessManager>
-#include <QNetworkReply>
-#include <QRegularExpression>
-#include <QSet>
-#include <QUrlQuery>
 #include <QMutex>
 #include <QMutexLocker>
 #include <QPainter>
@@ -38,7 +33,6 @@ namespace {
 constexpr uint32_t kCanvasWidth = 1280;
 constexpr uint32_t kCanvasHeight = 720;
 struct MapEntry { QString name; QString code; bool completed = false; };
-struct ChatRequest { QString author; QString name; QString code; };
 QMutex g_imageMutex;
 QImage g_overlayImage;
 uint64_t g_imageRevision = 0;
@@ -156,36 +150,6 @@ public:
 		auto *title = new QLabel(QStringLiteral("Fortnite クリエイティブ マップ順番"));
 		title->setStyleSheet("font-size: 16px; font-weight: 700;");
 		root->addWidget(title);
-
-		auto *youtubeTitle = new QLabel(QStringLiteral("YouTubeチャット連携"));
-		youtubeTitle->setStyleSheet("font-size: 14px; font-weight: 700; margin-top: 8px;");
-		root->addWidget(youtubeTitle);
-		auto *youtubeForm = new QFormLayout;
-		apiKeyEdit_ = new QLineEdit;
-		apiKeyEdit_->setEchoMode(QLineEdit::Password);
-		apiKeyEdit_->setPlaceholderText(QStringLiteral("YouTube Data APIキー"));
-		videoEdit_ = new QLineEdit;
-		videoEdit_->setPlaceholderText(QStringLiteral("配信URL または 動画ID"));
-		youtubeForm->addRow(QStringLiteral("APIキー"), apiKeyEdit_);
-		youtubeForm->addRow(QStringLiteral("配信"), videoEdit_);
-		root->addLayout(youtubeForm);
-		auto *monitorRow = new QHBoxLayout;
-		monitorButton_ = new QPushButton(QStringLiteral("チャット監視を開始"));
-		statusLabel_ = new QLabel(QStringLiteral("停止中"));
-		monitorRow->addWidget(monitorButton_);
-		monitorRow->addWidget(statusLabel_, 1);
-		root->addLayout(monitorRow);
-		root->addWidget(new QLabel(QStringLiteral("承認待ち（「マップ希望 マップ名 1234-5678-9012」）")));
-		pendingList_ = new QListWidget;
-		pendingList_->setMaximumHeight(130);
-		root->addWidget(pendingList_);
-		auto *approvalRow = new QHBoxLayout;
-		auto *approveButton = new QPushButton(QStringLiteral("承認して追加"));
-		auto *rejectButton = new QPushButton(QStringLiteral("却下"));
-		approvalRow->addWidget(approveButton);
-		approvalRow->addWidget(rejectButton);
-		root->addLayout(approvalRow);
-
 		auto *form = new QFormLayout;
 		nameEdit_ = new QLineEdit;
 		codeEdit_ = new QLineEdit;
@@ -211,10 +175,6 @@ public:
 		row2->addWidget(deleteButton); row2->addWidget(resetButton); root->addLayout(row2);
 		auto *hint = new QLabel(QStringLiteral("ソース追加 →「Fortnite マップ順番」を選択してください。"));
 		hint->setWordWrap(true); root->addWidget(hint);
-		connect(monitorButton_, &QPushButton::clicked, this, &RotationDock::toggleMonitoring);
-		connect(approveButton, &QPushButton::clicked, this, &RotationDock::approveRequest);
-		connect(rejectButton, &QPushButton::clicked, this, &RotationDock::rejectRequest);
-		connect(&pollTimer_, &QTimer::timeout, this, &RotationDock::pollChat);
 		connect(addButton, &QPushButton::clicked, this, &RotationDock::addMap);
 		connect(nameEdit_, &QLineEdit::returnPressed, this, &RotationDock::addMap);
 		connect(codeEdit_, &QLineEdit::returnPressed, this, &RotationDock::addMap);
@@ -226,100 +186,6 @@ public:
 		rebuildList();
 	}
 private slots:
-	void toggleMonitoring()
-	{
-		if (monitoring_) { stopMonitoring(QStringLiteral("停止中")); return; }
-		const QString key = apiKeyEdit_->text().trimmed();
-		QString video = videoEdit_->text().trimmed();
-		QRegularExpression idPattern(QStringLiteral("(?:v=|youtu\\.be/|live/)([A-Za-z0-9_-]{11})"));
-		const auto match = idPattern.match(video);
-		if (match.hasMatch()) video = match.captured(1);
-		if (!QRegularExpression(QStringLiteral("^[A-Za-z0-9_-]{11}$")).match(video).hasMatch() || key.isEmpty()) {
-			QMessageBox::information(this, QStringLiteral("入力を確認"),
-				QStringLiteral("YouTube Data APIキーと配信URL（または11文字の動画ID）を入力してください。"));
-			return;
-		}
-		apiKey_ = key; videoId_ = video; nextPageToken_.clear(); liveChatId_.clear(); firstPoll_ = true;
-		monitoring_ = true; monitorButton_->setText(QStringLiteral("監視を停止"));
-		statusLabel_->setText(QStringLiteral("配信を確認中…"));
-		QUrl url(QStringLiteral("https://www.googleapis.com/youtube/v3/videos"));
-		QUrlQuery query; query.addQueryItem(QStringLiteral("part"), QStringLiteral("liveStreamingDetails"));
-		query.addQueryItem(QStringLiteral("id"), videoId_); query.addQueryItem(QStringLiteral("key"), apiKey_);
-		url.setQuery(query);
-		auto *reply = network_.get(QNetworkRequest(url));
-		connect(reply, &QNetworkReply::finished, this, [this, reply] {
-			const QByteArray body = reply->readAll(); const auto error = reply->error(); reply->deleteLater();
-			if (error != QNetworkReply::NoError) { stopMonitoring(QStringLiteral("配信情報の取得に失敗")); return; }
-			const QJsonArray items = QJsonDocument::fromJson(body).object()[QStringLiteral("items")].toArray();
-			if (items.isEmpty()) { stopMonitoring(QStringLiteral("配信が見つかりません")); return; }
-			liveChatId_ = items[0].toObject()[QStringLiteral("liveStreamingDetails")].toObject()
-				[QStringLiteral("activeLiveChatId")].toString();
-			if (liveChatId_.isEmpty()) { stopMonitoring(QStringLiteral("ライブチャットがありません")); return; }
-			statusLabel_->setText(QStringLiteral("接続中（キーワード：マップ希望）")); pollChat();
-		});
-	}
-	void pollChat()
-	{
-		if (!monitoring_ || liveChatId_.isEmpty()) return;
-		QUrl url(QStringLiteral("https://www.googleapis.com/youtube/v3/liveChat/messages"));
-		QUrlQuery query; query.addQueryItem(QStringLiteral("part"), QStringLiteral("snippet,authorDetails"));
-		query.addQueryItem(QStringLiteral("liveChatId"), liveChatId_);
-		query.addQueryItem(QStringLiteral("maxResults"), QStringLiteral("200"));
-		query.addQueryItem(QStringLiteral("key"), apiKey_);
-		if (!nextPageToken_.isEmpty()) query.addQueryItem(QStringLiteral("pageToken"), nextPageToken_);
-		url.setQuery(query);
-		auto *reply = network_.get(QNetworkRequest(url));
-		connect(reply, &QNetworkReply::finished, this, [this, reply] {
-			const QByteArray body = reply->readAll(); const auto error = reply->error(); reply->deleteLater();
-			if (!monitoring_) return;
-			if (error != QNetworkReply::NoError) { stopMonitoring(QStringLiteral("チャット取得エラー")); return; }
-			const QJsonObject root = QJsonDocument::fromJson(body).object();
-			const QJsonArray items = root[QStringLiteral("items")].toArray();
-			if (!firstPoll_) {
-				for (const QJsonValue &value : items) {
-					const QJsonObject item = value.toObject();
-					const QString messageId = item[QStringLiteral("id")].toString();
-					if (seenMessageIds_.contains(messageId)) continue;
-					seenMessageIds_.insert(messageId);
-					const QJsonObject snippet = item[QStringLiteral("snippet")].toObject();
-					const QString message = snippet[QStringLiteral("displayMessage")].toString().trimmed();
-					if (!message.contains(QStringLiteral("マップ希望"))) continue;
-					QRegularExpression codePattern(QStringLiteral("(\\d{4})[- ]?(\\d{4})[- ]?(\\d{4})"));
-					const auto codeMatch = codePattern.match(message);
-					if (!codeMatch.hasMatch()) continue;
-					const QString code = codeMatch.captured(1) + "-" + codeMatch.captured(2) + "-" + codeMatch.captured(3);
-					bool duplicate = false;
-					for (const auto &map : g_maps) if (map.code == code) duplicate = true;
-					for (const auto &request : pending_) if (request.code == code) duplicate = true;
-					if (duplicate) continue;
-					QString name = message; name.remove(QStringLiteral("マップ希望")); name.remove(codeMatch.captured(0)); name = name.trimmed();
-					const QString author = item[QStringLiteral("authorDetails")].toObject()[QStringLiteral("displayName")].toString();
-					if (name.isEmpty()) name = QStringLiteral("%1さんの希望").arg(author);
-					pending_.push_back({author, name, code});
-					pendingList_->addItem(QStringLiteral("%1｜%2｜%3").arg(author, name, code));
-				}
-			}
-			firstPoll_ = false;
-			nextPageToken_ = root[QStringLiteral("nextPageToken")].toString();
-			const int interval = std::clamp(root[QStringLiteral("pollingIntervalMillis")].toInt(5000), 1000, 30000);
-			pollTimer_.start(interval);
-		});
-	}
-	void approveRequest()
-	{
-		const int row = pendingList_->currentRow();
-		if (row < 0 || row >= static_cast<int>(pending_.size())) return;
-		const auto request = pending_[row];
-		g_maps.push_back({request.name, request.code, false});
-		pending_.erase(pending_.begin() + row); delete pendingList_->takeItem(row);
-		commit(static_cast<int>(g_maps.size()) - 1);
-	}
-	void rejectRequest()
-	{
-		const int row = pendingList_->currentRow();
-		if (row < 0 || row >= static_cast<int>(pending_.size())) return;
-		pending_.erase(pending_.begin() + row); delete pendingList_->takeItem(row);
-	}
 	void addMap()
 	{
 		const QString name = nameEdit_->text().trimmed(), code = codeEdit_->text().trimmed();
@@ -344,11 +210,6 @@ private slots:
 	}
 	void resetMaps() { for (auto &map : g_maps) map.completed = false; commit(0); }
 private:
-	void stopMonitoring(const QString &status)
-	{
-		monitoring_ = false; pollTimer_.stop(); monitorButton_->setText(QStringLiteral("チャット監視を開始"));
-		statusLabel_->setText(status); liveChatId_.clear(); nextPageToken_.clear();
-	}
 	void moveMap(int direction)
 	{
 		const int row = list_->currentRow(), destination = row + direction;
@@ -369,17 +230,6 @@ private:
 			list_->addItem(QStringLiteral("%1  %2   %3").arg(state, map.name, map.code));
 		}
 	}
-	QNetworkAccessManager network_{this};
-	QTimer pollTimer_;
-	QLineEdit *apiKeyEdit_ = nullptr;
-	QLineEdit *videoEdit_ = nullptr;
-	QPushButton *monitorButton_ = nullptr;
-	QLabel *statusLabel_ = nullptr;
-	QListWidget *pendingList_ = nullptr;
-	QString apiKey_, videoId_, liveChatId_, nextPageToken_;
-	QSet<QString> seenMessageIds_;
-	std::vector<ChatRequest> pending_;
-	bool monitoring_ = false, firstPoll_ = true;
 	QLineEdit *nameEdit_ = nullptr;
 	QLineEdit *codeEdit_ = nullptr;
 	QListWidget *list_ = nullptr;
