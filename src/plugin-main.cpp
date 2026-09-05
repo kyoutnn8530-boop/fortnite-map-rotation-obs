@@ -88,6 +88,8 @@ void drawText(QPainter &painter, const QRectF &rect, const QString &text, int si
 	font.setPixelSize(size);
 	font.setWeight(static_cast<QFont::Weight>(weight));
 	painter.setFont(font);
+	painter.setPen(QColor(0, 0, 0, 190));
+	painter.drawText(rect.translated(3, 3), alignment, text);
 	painter.setPen(color);
 	painter.drawText(rect, alignment, text);
 }
@@ -99,7 +101,7 @@ QImage renderOverlay()
 	QPainter painter(&image);
 	painter.setRenderHint(QPainter::Antialiasing, true);
 	painter.setRenderHint(QPainter::TextAntialiasing, true);
-	const QColor accent(78, 155, 94), panel(4, 57, 25, 242), white(242, 250, 244), muted(171, 197, 177);
+	const QColor accent(98, 255, 139), panel(1, 30, 13, 255), white(255, 255, 255), muted(220, 239, 225);
 	int current = -1, next = -1, completed = 0;
 	for (int i = 0; i < static_cast<int>(g_maps.size()); ++i) {
 		if (g_maps[i].completed) ++completed;
@@ -109,26 +111,28 @@ QImage renderOverlay()
 	const int total = static_cast<int>(g_maps.size());
 	const qreal ratio = total > 0 ? static_cast<qreal>(completed) / total : 0.0;
 
-	const QRectF card(190, 78, 900, 410);
-	roundedRect(painter, card, 38, panel);
-	drawText(painter, QRectF(230, 96, 820, 50), QStringLiteral("フォートナイト  マップ順"), 32, QFont::Bold,
+	const QRectF card(165, 65, 950, 445);
+	roundedRect(painter, card, 40, panel);
+	drawText(painter, QRectF(205, 82, 870, 58), QStringLiteral("フォートナイト  マップ順"), 37, QFont::Black,
 		 white, Qt::AlignCenter);
-	drawText(painter, QRectF(230, 145, 820, 38), QStringLiteral("現在のマップ"), 23, QFont::DemiBold,
-		 muted, Qt::AlignCenter);
-	drawText(painter, QRectF(230, 182, 820, 92),
-		 current < 0 ? QStringLiteral("マップ未登録") : g_maps[current].name, 54, QFont::Black, white,
+	drawText(painter, QRectF(205, 142, 870, 42), QStringLiteral("現在のマップ"), 27, QFont::Bold,
+		 accent, Qt::AlignCenter);
+	const QString currentName = current < 0 ? QStringLiteral("マップ未登録") : g_maps[current].name;
+	const int currentSize = currentName.size() > 18 ? 44 : (currentName.size() > 12 ? 52 : 64);
+	drawText(painter, QRectF(205, 180, 870, 98), currentName, currentSize, QFont::Black, white,
 		 Qt::AlignCenter);
 	if (current >= 0 && !g_maps[current].code.isEmpty())
-		drawText(painter, QRectF(230, 268, 820, 42), g_maps[current].code, 25, QFont::DemiBold, muted,
+		drawText(painter, QRectF(205, 274, 870, 48), g_maps[current].code, 31, QFont::Bold, accent,
 			 Qt::AlignCenter);
-	const QString nextText = next < 0 ? QStringLiteral("次のマップ：—")
-					  : QStringLiteral("次のマップ：%1").arg(g_maps[next].name);
-	drawText(painter, QRectF(230, 315, 820, 50), nextText, 29, QFont::Bold, white, Qt::AlignCenter);
-	roundedRect(painter, QRectF(190, 391, 900, 12), 6, QColor(104, 167, 116, 80));
+	const QString nextName = next < 0 ? QStringLiteral("—") : g_maps[next].name;
+	const QString nextText = QStringLiteral("次のマップ：%1").arg(nextName);
+	const int nextSize = nextText.size() > 24 ? 27 : (nextText.size() > 17 ? 31 : 35);
+	drawText(painter, QRectF(205, 326, 870, 58), nextText, nextSize, QFont::Black, white, Qt::AlignCenter);
+	roundedRect(painter, QRectF(165, 407, 950, 16), 8, QColor(255, 255, 255, 60));
 	if (ratio > 0.0)
-		roundedRect(painter, QRectF(190, 391, 900 * ratio, 12), 6, accent);
-	drawText(painter, QRectF(230, 414, 820, 48), QStringLiteral("%1 / %2 マップ完了").arg(completed).arg(total),
-		 22, QFont::DemiBold, muted, Qt::AlignCenter);
+		roundedRect(painter, QRectF(165, 407, 950 * ratio, 16), 8, accent);
+	drawText(painter, QRectF(205, 438, 870, 50), QStringLiteral("%1 / %2 マップ完了").arg(completed).arg(total),
+		 27, QFont::Bold, white, Qt::AlignCenter);
 	return image;
 }
 
