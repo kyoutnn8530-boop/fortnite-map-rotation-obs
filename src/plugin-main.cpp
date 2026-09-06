@@ -32,7 +32,7 @@ OBS_MODULE_USE_DEFAULT_LOCALE(PLUGIN_NAME, "ja-JP")
 namespace {
 constexpr uint32_t kCanvasWidth = 1280;
 constexpr uint32_t kCanvasHeight = 720;
-struct MapEntry { QString name; QString code; bool completed = false; };
+struct MapEntry { QString name; bool completed = false; };
 QMutex g_imageMutex;
 QImage g_overlayImage;
 uint64_t g_imageRevision = 0;
@@ -52,7 +52,6 @@ void saveMaps()
 	for (const auto &map : g_maps) {
 		QJsonObject object;
 		object["name"] = map.name;
-		object["code"] = map.code;
 		object["completed"] = map.completed;
 		array.append(object);
 	}
@@ -69,7 +68,7 @@ void loadMaps()
 	if (!document.isArray()) return;
 	for (const QJsonValue &value : document.array()) {
 		const QJsonObject object = value.toObject();
-		MapEntry entry{object["name"].toString(), object["code"].toString(), object["completed"].toBool()};
+		MapEntry entry{object["name"].toString(), object["completed"].toBool()};
 		if (!entry.name.trimmed().isEmpty()) g_maps.push_back(entry);
 	}
 }
@@ -111,7 +110,7 @@ QImage renderOverlay()
 	const int total = static_cast<int>(g_maps.size());
 	const qreal ratio = total > 0 ? static_cast<qreal>(completed) / total : 0.0;
 
-	const QRectF card(165, 65, 950, 445);
+	const QRectF card(165, 65, 950, 420);
 	roundedRect(painter, card, 40, panel);
 	drawText(painter, QRectF(205, 82, 870, 58), QStringLiteral("フォートナイト  マップ順"), 37, QFont::Black,
 		 white, Qt::AlignCenter);
@@ -121,17 +120,14 @@ QImage renderOverlay()
 	const int currentSize = currentName.size() > 18 ? 44 : (currentName.size() > 12 ? 52 : 64);
 	drawText(painter, QRectF(205, 180, 870, 98), currentName, currentSize, QFont::Black, white,
 		 Qt::AlignCenter);
-	if (current >= 0 && !g_maps[current].code.isEmpty())
-		drawText(painter, QRectF(205, 274, 870, 48), g_maps[current].code, 31, QFont::Bold, accent,
-			 Qt::AlignCenter);
 	const QString nextName = next < 0 ? QStringLiteral("—") : g_maps[next].name;
 	const QString nextText = QStringLiteral("次のマップ：%1").arg(nextName);
 	const int nextSize = nextText.size() > 24 ? 27 : (nextText.size() > 17 ? 31 : 35);
-	drawText(painter, QRectF(205, 326, 870, 58), nextText, nextSize, QFont::Black, white, Qt::AlignCenter);
-	roundedRect(painter, QRectF(165, 407, 950, 16), 8, QColor(255, 255, 255, 60));
+	drawText(painter, QRectF(205, 288, 870, 58), nextText, nextSize, QFont::Black, white, Qt::AlignCenter);
+	roundedRect(painter, QRectF(165, 370, 950, 16), 8, QColor(255, 255, 255, 60));
 	if (ratio > 0.0)
-		roundedRect(painter, QRectF(165, 407, 950 * ratio, 16), 8, accent);
-	drawText(painter, QRectF(205, 438, 870, 50), QStringLiteral("%1 / %2 マップ完了").arg(completed).arg(total),
+		roundedRect(painter, QRectF(165, 370, 950 * ratio, 16), 8, accent);
+	drawText(painter, QRectF(205, 404, 870, 50), QStringLiteral("%1 / %2 マップ完了").arg(completed).arg(total),
 		 27, QFont::Bold, white, Qt::AlignCenter);
 	return image;
 }
@@ -156,11 +152,8 @@ public:
 		root->addWidget(title);
 		auto *form = new QFormLayout;
 		nameEdit_ = new QLineEdit;
-		codeEdit_ = new QLineEdit;
 		nameEdit_->setPlaceholderText(QStringLiteral("例：レッド vs ブルー"));
-		codeEdit_->setPlaceholderText(QStringLiteral("例：1234-5678-9012"));
 		form->addRow(QStringLiteral("マップ名"), nameEdit_);
-		form->addRow(QStringLiteral("マップコード"), codeEdit_);
 		root->addLayout(form);
 		auto *addButton = new QPushButton(QStringLiteral("＋ マップを追加"));
 		addButton->setDefault(true);
@@ -181,7 +174,6 @@ public:
 		hint->setWordWrap(true); root->addWidget(hint);
 		connect(addButton, &QPushButton::clicked, this, &RotationDock::addMap);
 		connect(nameEdit_, &QLineEdit::returnPressed, this, &RotationDock::addMap);
-		connect(codeEdit_, &QLineEdit::returnPressed, this, &RotationDock::addMap);
 		connect(completeButton, &QPushButton::clicked, this, &RotationDock::toggleComplete);
 		connect(deleteButton, &QPushButton::clicked, this, &RotationDock::removeMap);
 		connect(resetButton, &QPushButton::clicked, this, &RotationDock::resetMaps);
@@ -192,12 +184,12 @@ public:
 private slots:
 	void addMap()
 	{
-		const QString name = nameEdit_->text().trimmed(), code = codeEdit_->text().trimmed();
+		const QString name = nameEdit_->text().trimmed();
 		if (name.isEmpty()) {
 			QMessageBox::information(this, QStringLiteral("マップ名が必要です"), QStringLiteral("マップ名を入力してください。"));
 			return;
 		}
-		g_maps.push_back({name, code, false}); nameEdit_->clear(); codeEdit_->clear();
+		g_maps.push_back({name, false}); nameEdit_->clear();
 		commit(static_cast<int>(g_maps.size()) - 1); nameEdit_->setFocus();
 	}
 	void toggleComplete()
@@ -231,11 +223,10 @@ private:
 		for (int i = 0; i < static_cast<int>(g_maps.size()); ++i) {
 			const auto &map = g_maps[i];
 			const QString state = map.completed ? QStringLiteral("✓") : QString::number(i + 1);
-			list_->addItem(QStringLiteral("%1  %2   %3").arg(state, map.name, map.code));
+			list_->addItem(QStringLiteral("%1  %2").arg(state, map.name));
 		}
 	}
 	QLineEdit *nameEdit_ = nullptr;
-	QLineEdit *codeEdit_ = nullptr;
 	QListWidget *list_ = nullptr;
 };
 
